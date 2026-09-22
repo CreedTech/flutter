@@ -109,6 +109,12 @@ gboolean fl_opengl_manager_make_resource_current(FlOpenGLManager* self) {
 }
 
 gboolean fl_opengl_manager_make_platform_current(FlOpenGLManager* self) {
+  // Under libglvnd, calling eglMakeCurrent on the GTK main thread while a GLX
+  // context (GdkGLContext) is current overwrites libglvnd's thread-local
+  // current context pointer with the EGL context without unbinding the GLX
+  // context or sending an X_GLXMakeContextCurrent(None) request to the X
+  // server, causing client-server context state desynchronization.
+  gdk_gl_context_clear_current();
   return eglMakeCurrent(self->display, EGL_NO_SURFACE, EGL_NO_SURFACE,
                         self->platform_context) == EGL_TRUE;
 }
