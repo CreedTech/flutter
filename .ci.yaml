@@ -7730,7 +7730,7 @@ targets:
   - name: Linux windowing_test
     recipe: devicelab/devicelab_drone
     presubmit: true
-    bringup: true
+    bringup: false # DO NOT SUBMIT - testing in presbumit
     timeout: 60
     properties:
       dependencies: >-
