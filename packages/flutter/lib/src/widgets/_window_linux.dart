@@ -512,12 +512,18 @@ abstract mixin class BaseWindowControllerLinux {
 mixin _ToplevelWindowControllerLinux on BaseWindowControllerLinux {
   /// Watches the window for the changes a top level window can undergo.
   void _createWindowMonitor({required VoidCallback onClose, required VoidCallback onDestroy}) {
+    void notifyIfAlive() {
+      if (!_destroyed) {
+        notifyListeners();
+      }
+    }
+
     _windowMonitor = _FlWindowMonitor(
       _window,
-      onConfigure: notifyListeners,
-      onStateChanged: notifyListeners,
-      onIsActiveNotify: notifyListeners,
-      onTitleNotify: notifyListeners,
+      onConfigure: notifyIfAlive,
+      onStateChanged: notifyIfAlive,
+      onIsActiveNotify: notifyIfAlive,
+      onTitleNotify: notifyIfAlive,
       onClose: onClose,
       onDestroy: onDestroy,
     );
@@ -1157,12 +1163,8 @@ class _GtkWidget extends _GObject {
 
   /// Destroy the widget.
   void destroy() {
-    _gdkGlContextClearCurrent();
     _gtkWindowDestroy(instance);
   }
-
-  @ffi.Native<ffi.Void Function()>(symbol: 'gdk_gl_context_clear_current')
-  external static void _gdkGlContextClearCurrent();
 
   @ffi.Native<ffi.Void Function(ffi.Pointer<ffi.NativeType>, ffi.Bool)>(
     symbol: 'gtk_widget_set_app_paintable',

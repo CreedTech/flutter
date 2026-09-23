@@ -650,10 +650,19 @@ static gboolean fl_view_key_release_event(GtkWidget* widget,
   return handle_key_event(self, key_event);
 }
 
+static void fl_view_finalize(GObject* object) {
+  FlView* self = FL_VIEW(object);
+
+  g_clear_object(&self->renderer);
+
+  G_OBJECT_CLASS(fl_view_parent_class)->finalize(object);
+}
+
 static void fl_view_class_init(FlViewClass* klass) {
   GObjectClass* object_class = G_OBJECT_CLASS(klass);
   object_class->notify = fl_view_notify;
   object_class->dispose = fl_view_dispose;
+  object_class->finalize = fl_view_finalize;
 
   GtkWidgetClass* widget_class = GTK_WIDGET_CLASS(klass);
   widget_class->realize = fl_view_realize;
@@ -704,6 +713,7 @@ static void setup_engine(FlView* self) {
       }
       break;
   }
+  g_object_ref_sink(self->renderer);
   gtk_widget_show(GTK_WIDGET(self->renderer));
   gtk_container_add(GTK_CONTAINER(self->event_box), GTK_WIDGET(self->renderer));
   g_signal_connect_swapped(self->renderer, "realize", G_CALLBACK(realize_cb),

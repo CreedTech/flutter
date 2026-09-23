@@ -59,7 +59,7 @@ static void get_frame_size(FlViewRendererOpenGL* self,
 static gboolean redraw_cb(gpointer user_data) {
   g_autoptr(FlViewRendererOpenGL) self = FL_VIEW_RENDERER_OPENGL(user_data);
 
-  if (self->compositor == nullptr) {
+  if (self->compositor == nullptr || self->engine == nullptr) {
     return G_SOURCE_REMOVE;
   }
 
@@ -199,13 +199,16 @@ static void fl_view_renderer_opengl_present_layers(FlViewRenderer* renderer,
                                                    size_t layers_count) {
   FlViewRendererOpenGL* self = FL_VIEW_RENDERER_OPENGL(renderer);
 
-  // Frames may be presented before the widget is realized and the compositor
-  // is set up; ignore them.
-  if (self->compositor == nullptr) {
+  g_mutex_lock(&self->frame_mutex);
+
+  // Frames may be presented before the widget is realized, or after it has been
+  // unrealized; ignore them. Checked under frame_mutex so unrealize cannot
+  // release these objects while a frame is being presented.
+  if (self->compositor == nullptr || self->frame == nullptr) {
+    g_mutex_unlock(&self->frame_mutex);
     return;
   }
 
-  g_mutex_lock(&self->frame_mutex);
   fl_opengl_frame_composite(self->frame, self->compositor, layers,
                             layers_count);
   g_mutex_unlock(&self->frame_mutex);
@@ -221,10 +224,17 @@ static void fl_view_renderer_opengl_present_layers(FlViewRenderer* renderer,
 static void fl_view_renderer_opengl_unrealize(GtkWidget* widget) {
   FlViewRendererOpenGL* self = FL_VIEW_RENDERER_OPENGL(widget);
 
-  // Clear the current context before the GdkWindow is destroyed by unrealize,
-  // as fl_view_renderer_opengl_draw() leaves render_context current.
-  gdk_gl_context_clear_current();
+  g_mutex_lock(&self->frame_mutex);
+  // Clear the current context before the GdkWindow is destroyed by unrealize
+  // only if this view's render_context is the one currently bound.
+  if (self->render_context != nullptr &&
+      gdk_gl_context_get_current() == self->render_context) {
+    gdk_gl_context_clear_current();
+  }
   g_clear_object(&self->render_context);
+  g_clear_object(&self->compositor);
+  g_clear_object(&self->frame);
+  g_mutex_unlock(&self->frame_mutex);
 
   GTK_WIDGET_CLASS(fl_view_renderer_opengl_parent_class)->unrealize(widget);
 }
@@ -232,13 +242,17 @@ static void fl_view_renderer_opengl_unrealize(GtkWidget* widget) {
 static void fl_view_renderer_opengl_dispose(GObject* object) {
   FlViewRendererOpenGL* self = FL_VIEW_RENDERER_OPENGL(object);
 
-  if (self->render_context != nullptr) {
+  g_mutex_lock(&self->frame_mutex);
+  if (self->render_context != nullptr &&
+      gdk_gl_context_get_current() == self->render_context) {
     gdk_gl_context_clear_current();
   }
-  g_clear_object(&self->engine);
   g_clear_object(&self->render_context);
-  g_clear_object(&self->task_runner);
-  g_mutex_clear(&self->frame_mutex);
+  g_clear_object(&self->compositor);
+  g_clear_object(&self->frame);
+  g_mutex_unlock(&self->frame_mutex);
+
+  g_clear_object(&self->engine);
 
   G_OBJECT_CLASS(fl_view_renderer_opengl_parent_class)->dispose(object);
 }
@@ -246,13 +260,13 @@ static void fl_view_renderer_opengl_dispose(GObject* object) {
 static void fl_view_renderer_opengl_finalize(GObject* object) {
   FlViewRendererOpenGL* self = FL_VIEW_RENDERER_OPENGL(object);
 
-  // The compositor is released here rather than in dispose() so it outlives a
-  // forced dispose (e.g. gtk_widget_destroy()) and is only freed once the last
-  // reference is dropped. This keeps it alive for the raster thread, which
-  // holds a strong reference on the view (and thus this renderer) while
-  // presenting.
+  // Released in finalize so they outlive a forced dispose (e.g.
+  // gtk_widget_destroy()) while the raster thread holds a strong reference on
+  // the view (and thus this renderer) during present_layers.
   g_clear_object(&self->compositor);
   g_clear_object(&self->frame);
+  g_clear_object(&self->task_runner);
+  g_mutex_clear(&self->frame_mutex);
 
   G_OBJECT_CLASS(fl_view_renderer_opengl_parent_class)->finalize(object);
 }
