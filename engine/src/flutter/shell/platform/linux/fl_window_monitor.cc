@@ -99,6 +99,9 @@ static void destroy_cb(FlWindowMonitor* self) {
 static void fl_window_monitor_dispose(GObject* object) {
   FlWindowMonitor* self = FL_WINDOW_MONITOR(object);
 
+  if (self->window != nullptr) {
+    g_signal_handlers_disconnect_by_data(self->window, self);
+  }
   g_clear_object(&self->window);
 
   G_OBJECT_CLASS(fl_window_monitor_parent_class)->dispose(object);

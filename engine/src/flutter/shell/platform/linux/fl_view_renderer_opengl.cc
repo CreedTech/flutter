@@ -217,9 +217,24 @@ static void fl_view_renderer_opengl_present_layers(FlViewRenderer* renderer,
   g_idle_add(redraw_cb, g_object_ref(self));
 }
 
+// Implements GtkWidget::unrealize.
+static void fl_view_renderer_opengl_unrealize(GtkWidget* widget) {
+  FlViewRendererOpenGL* self = FL_VIEW_RENDERER_OPENGL(widget);
+
+  // Clear the current context before the GdkWindow is destroyed by unrealize,
+  // as fl_view_renderer_opengl_draw() leaves render_context current.
+  gdk_gl_context_clear_current();
+  g_clear_object(&self->render_context);
+
+  GTK_WIDGET_CLASS(fl_view_renderer_opengl_parent_class)->unrealize(widget);
+}
+
 static void fl_view_renderer_opengl_dispose(GObject* object) {
   FlViewRendererOpenGL* self = FL_VIEW_RENDERER_OPENGL(object);
 
+  if (self->render_context != nullptr) {
+    gdk_gl_context_clear_current();
+  }
   g_clear_object(&self->engine);
   g_clear_object(&self->render_context);
   g_clear_object(&self->task_runner);
@@ -250,6 +265,7 @@ static void fl_view_renderer_opengl_class_init(
 
   GtkWidgetClass* widget_class = GTK_WIDGET_CLASS(klass);
   widget_class->realize = fl_view_renderer_opengl_realize;
+  widget_class->unrealize = fl_view_renderer_opengl_unrealize;
   widget_class->draw = fl_view_renderer_opengl_draw;
 
   FlViewRendererClass* renderer_class = FL_VIEW_RENDERER_CLASS(klass);

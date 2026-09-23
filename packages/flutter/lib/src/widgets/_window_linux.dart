@@ -350,12 +350,12 @@ abstract mixin class BaseWindowControllerLinux {
     if (_destroyed) {
       return;
     }
-    _viewMonitor.close();
-    _viewMonitor.unref();
-    _window.destroy();
-    _windowMonitor.close();
-    _windowMonitor.unref();
     _destroyed = true;
+    _viewMonitor.unref();
+    _viewMonitor.close();
+    _window.destroy();
+    _windowMonitor.unref();
+    _windowMonitor.close();
     _owner.registrar.unregister(rootView.viewId);
     notifyListeners();
   }
@@ -1157,8 +1157,12 @@ class _GtkWidget extends _GObject {
 
   /// Destroy the widget.
   void destroy() {
+    _gdkGlContextClearCurrent();
     _gtkWindowDestroy(instance);
   }
+
+  @ffi.Native<ffi.Void Function()>(symbol: 'gdk_gl_context_clear_current')
+  external static void _gdkGlContextClearCurrent();
 
   @ffi.Native<ffi.Void Function(ffi.Pointer<ffi.NativeType>, ffi.Bool)>(
     symbol: 'gtk_widget_set_app_paintable',
