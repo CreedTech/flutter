@@ -343,6 +343,8 @@ abstract mixin class BaseWindowControllerLinux {
     _window.add(_view);
   }
 
+  void _notifyWindowDestroyed() {}
+
   /// Destroys the native window and releases the monitors watching it.
   ///
   /// {@macro flutter.widgets.windowing.experimental}
@@ -353,10 +355,10 @@ abstract mixin class BaseWindowControllerLinux {
     _destroyed = true;
     _viewMonitor.unref();
     _viewMonitor.close();
-    _window.destroy();
     _windowMonitor.unref();
     _windowMonitor.close();
     _owner.registrar.unregister(rootView.viewId);
+    _notifyWindowDestroyed();
     notifyListeners();
   }
 
@@ -510,8 +512,18 @@ abstract mixin class BaseWindowControllerLinux {
 ///
 /// {@macro flutter.widgets.windowing.experimental}
 mixin _ToplevelWindowControllerLinux on BaseWindowControllerLinux {
+  VoidCallback? _onDestroy;
+
+  @override
+  void _notifyWindowDestroyed() {
+    final VoidCallback? onDestroy = _onDestroy;
+    _onDestroy = null;
+    onDestroy?.call();
+  }
+
   /// Watches the window for the changes a top level window can undergo.
   void _createWindowMonitor({required VoidCallback onClose, required VoidCallback onDestroy}) {
+    _onDestroy = onDestroy;
     void notifyIfAlive() {
       if (!_destroyed) {
         notifyListeners();
@@ -525,7 +537,7 @@ mixin _ToplevelWindowControllerLinux on BaseWindowControllerLinux {
       onIsActiveNotify: notifyIfAlive,
       onTitleNotify: notifyIfAlive,
       onClose: onClose,
-      onDestroy: onDestroy,
+      onDestroy: _notifyWindowDestroyed,
     );
   }
 

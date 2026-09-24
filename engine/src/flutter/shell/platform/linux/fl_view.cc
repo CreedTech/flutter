@@ -547,13 +547,18 @@ static void fl_view_notify(GObject* object, GParamSpec* pspec) {
   }
 }
 
-static void fl_view_dispose(GObject* object) {
-  FlView* self = FL_VIEW(object);
+void fl_view_begin_destroy(FlView* self) {
+  g_return_if_fail(FL_IS_VIEW(self));
 
-  g_cancellable_cancel(self->cancellable);
+  if (self->cancellable != nullptr) {
+    g_cancellable_cancel(self->cancellable);
+  }
 
-  g_clear_object(&self->zoom_gesture);
-  g_clear_object(&self->rotate_gesture);
+  if (FL_IS_VIEW_RENDERER_OPENGL(self->renderer)) {
+    fl_view_renderer_opengl_cancel_wait(
+        FL_VIEW_RENDERER_OPENGL(self->renderer));
+  }
+
   if (self->engine != nullptr) {
     // If this view holds the text input focus, clear the handler's widget
     // pointer so it does not dangle once this view is finalized.
@@ -571,6 +576,15 @@ static void fl_view_dispose(GObject* object) {
   }
 
   g_clear_object(&self->engine);
+}
+
+static void fl_view_dispose(GObject* object) {
+  FlView* self = FL_VIEW(object);
+
+  fl_view_begin_destroy(self);
+
+  g_clear_object(&self->zoom_gesture);
+  g_clear_object(&self->rotate_gesture);
   g_clear_object(&self->window_state_monitor);
   g_clear_object(&self->scrolling_manager);
   g_clear_object(&self->pointer_manager);
